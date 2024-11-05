@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memóriajáték</title>
+    <style>
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #1d1f21;
+            color: #ecf0f1;
+        }
+        .container {
+            background-color: #61666c;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
+        }
+        h1 {
+            color: #ffffff;
+            margin-bottom: 20px;
+            font-size: 2.5em;
+        }
+        .beallitasok {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        select, button {
+            margin: 5px;
+            padding: 10px 15px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            background-color: #282c2f;
+            color: #ecf0f1;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+        }
+        select:hover, button:hover {
+            background-color: #ffffff; color: #1d1f21;
+        }
+        button {
+            background-color: #27ae60;
+        }
+        .jatek-tabla {
+            display: grid;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+        .kartya {
+            width: 80px;
+            height: 80px;
+            background-color: #46484b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2em;
+            cursor: pointer;
+            border-radius: 10px;
+            transition: transform 0.3s, background-color 0.3s;
+        }
+        .kartya:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 10px rgba(244, 244, 244, 0.5);
+        }
+        .kartya.forditott {
+            background-color: #ffffff;
+        }
+        .ido, .legjobb-ido {
+            margin-top: 20px;
+            font-size: 1.2em;
+            color: #ffffff;
+        }
+        #ujrainditas {
+            margin-top: 20px;
+            background-color: #e74c3c;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Memóriajáték</h1>
+        <div class="beallitasok">
+            <select id="nehezseg">
+                <option value="konnyu">Könnyű</option>
+                <option value="kozepes">Közepes</option>
+                <option value="nehez">Nehéz</option>
+            </select>
+            <select id="szimbolum">
+                <option value="gyumolcsok">Gyümölcsök</option>
+                <option value="tenger">Tenger</option>
+                <option value="allatok">Állatok</option>
+                <option value="űr">Űr</option>
+                <option value="emoji">Emojik</option>
+                <option value="etelek">Ételek</option>
+                <option value="idojaras">Időjárás</option>
+                <option value="sportok">Sportok</option>
+            </select>
+            <button onclick="jatekKezdese()">Játék indítása</button>
+        </div>
+        <div id="jatekTabla" class="jatek-tabla"></div>
+        <div class="ido">Idő: <span id="ido">00:00</span></div>
+        <div class="legjobb-ido">Legjobb idő: <span id="legjobbIdo">--:--</span></div>
+        <button id="ujrainditas" onclick="jatekKezdese()">Újraindítás</button>
+        <h3>A nehézségi szint teljesítésére 40 másodperc áll rendelkezésedre!</h3>
+    </div>
+
+    <script>
+        const jatekTabla = document.getElementById("jatekTabla");
+        const idoKijelzo = document.getElementById("ido");
+        const legjobbIdoKijelzo = document.getElementById("legjobbIdo");
+
+        let kartyak = [];
+        let forditottKartyak = [];
+        let parokSzama = 0;
+        let ido = 0;
+        let idozito;
+        let legjobbIdo = localStorage.getItem("legjobbIdo") || Infinity;
+        let idokorlat = 40; 
+        let idokorlatIdozito;
+
+        function jatekKezdese() {
+            jatekTabla.innerHTML = '';
+            clearInterval(idozito);
+            clearInterval(idokorlatIdozito);
+            ido = 0;
+            idoKijelzo.innerText = "00:00";
+            parokSzama = 0;
+            forditottKartyak = [];
+
+            const nehezseg = document.getElementById("nehezseg").value;
+            const szimbolumTipus = document.getElementById("szimbolum").value;
+
+            const parSzam = nehezseg === "konnyu" ? 6 : nehezseg === "kozepes" ? 8 : 10;
+            
+            kartyak = kartyakGeneralasa(parSzam, szimbolumTipus);
+            kever(kartyak);
+
+            const oszlopSzam = Math.ceil(Math.sqrt(parSzam * 2));
+            jatekTabla.style.gridTemplateColumns = `repeat(${oszlopSzam}, 1fr)`;
+
+            kartyak.forEach((kartya) => {
+                const kartyaElem = document.createElement("div");
+                kartyaElem.className = "kartya";
+                kartyaElem.dataset.szimbolum = kartya;
+                kartyaElem.onclick = kartyaFordit;
+                jatekTabla.appendChild(kartyaElem);
+            });
+
+            idozito = setInterval(() => {
+                ido++;
+                idoKijelzo.innerText = idoFormazas(ido);
+            }, 1000);
+
+            if (nehezseg === "nehez") {
+                idokorlatIdozito = setTimeout(() => {
+                    clearInterval(idozito);
+                    alert("Lejárt az idő! Próbáld újra.");
+                }, idokorlat * 1000);
+            }
+
+            frissitLegjobbIdo();
+        }
+
+        function kartyakGeneralasa(parSzam, tipus) {
+            const szimbolumok = {
+                gyumolcsok: ["🍎", "🍌", "🍇", "🍒", "🍉", "🍓", "🍍", "🥝", "🍊", "🥭"],
+                tenger: ["🐟", "🐙", "🦀", "🐬", "🐠", "🦈", "🐋", "🦑", "🐡", "🦞"],
+                allatok: ["🐶", "🐱", "🐭", "🐰", "🦁", "🐮", "🐸", "🐔", "🐧", "🐘"],
+                "űr": ["🚀", "🛸", "🌌", "🛰️", "🌑", "⭐", "🌍", "🪐", "☄️", "🌠"],
+                emoji: ["😀", "😂", "😍", "😎", "🤯", "🤖", "😈", "👻", "👽", "💩"],
+                idojaras: ["☀️", "🌤️", "🌧️", "⛈️", "🌩️", "❄️", "🌈", "💨", "🌪️", "🌫️"],
+                etelek: ["🍕", "🍔", "🍟", "🌭", "🍿", "🍣", "🍜", "🍤", "🍩", "🍪"],
+                sportok: ["⚽", "🏀", "🏈", "🎾", "🏐", "🏓", "🏸", "🥊", "🏆", "⛳"],
+            }[tipus].slice(0, parSzam);
+            return [...szimbolumok, ...szimbolumok];
+        }
+
+        function kever(tomb) {
+            for (let i = tomb.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [tomb[i], tomb[j]] = [tomb[j], tomb[i]];
+            }
+        }
+
+        function kartyaFordit(e) {
+            const kartya = e.target;
+            if (kartya.classList.contains("forditott") || forditottKartyak.length === 2) return;
+
+            kartya.classList.add("forditott");
+            kartya.innerText = kartya.dataset.szimbolum;
+            forditottKartyak.push(kartya);
+
+            if (forditottKartyak.length === 2) setTimeout(parEllenorzes, 100);
+        }
+
+        function parEllenorzes() {
+            const [kartya1, kartya2] = forditottKartyak;
+            if (kartya1.dataset.szimbolum === kartya2.dataset.szimbolum) {
+                parokSzama += 2;
+                forditottKartyak = [];
+                if (parokSzama === kartyak.length) {
+                    clearInterval(idozito);
+                    clearTimeout(idokorlatIdozito);
+                    if (ido < legjobbIdo) {
+                        legjobbIdo = ido;
+                        localStorage.setItem("legjobbIdo", legjobbIdo);
+                        frissitLegjobbIdo();
+                    }
+                    setTimeout(() => {
+                        alert(`Gratulálok! Teljesítetted a játékot ${idoFormazas(ido)} alatt.`);
+                    }, 500);
+                }
+            } else {
+                setTimeout(() => {
+                    kartya1.classList.remove("forditott");
+                    kartya2.classList.remove("forditott");
+                    kartya1.innerText = kartya2.innerText = '';
+                    forditottKartyak = [];
+                }, 500);
+            }
+        }
+
+        function idoFormazas(mp) {
+            const perc = Math.floor(mp / 60);
+            const masodperc = mp % 60;
+            return `${perc.toString().padStart(2, "0")}:${masodperc.toString().padStart(2, "0")}`;
+        }
+
+        function frissitLegjobbIdo() {
+            legjobbIdoKijelzo.innerText = legjobbIdo === Infinity ? "--:--" : idoFormazas(legjobbIdo);
+        }
+
+        frissitLegjobbIdo();
+    </script>
+</body>
+</html>
